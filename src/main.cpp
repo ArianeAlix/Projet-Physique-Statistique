@@ -21,7 +21,10 @@ const double eps = 1;//eps réduit
 const double mR = 6.63*pow(10, -26);//masse réelle d'un atome d'argon
 const double m = 1;//masse réduite
 const double L = N * sig* a;
+
+//Dimensionnement du potentiel
 const double rcut = 2.5*sig;
+const double rm = 1.5*sig;
 
 // Constantes liées au temps
 const double deltaT = pow(10, -2);//pas de temps de la simulation
@@ -73,8 +76,14 @@ void init1D(double* x0,double* x1, double * v) {
 }
 
 double pot(double rij) {
-	if (rij <= rcut) {
+	if (rij <= rm) {
 		double p = 4 * eps * (pow(sig / rij, 12) - pow(sig / rij, 6));
+		return p;
+	}
+	else if (rm < rij && rij  <= rcut) {
+		double p = 4 * eps * (pow(sig / rij, 12) - pow(sig / rij, 6));
+		double x = (rij - rm) / (rcut - rm);
+		p *= (2 * pow(x, 3) - 3 * pow(x, 2) + 1);
 		return p;
 	}
 	return 0.0;
@@ -82,7 +91,7 @@ double pot(double rij) {
 }
 
 double pot_prime(double rij) {
-	double h = pow(10, -15);
+	double h = pow(10, -8);
 	if (rij <= rcut) {
 		double pp = (pot(rij + h) - pot(rij-h)) / (2*h);
 		return pp;
@@ -93,8 +102,14 @@ double pot_prime(double rij) {
 
 double f1D(double rij) {
 	// On distingue  les cas r<>rcut=2.5*sigma
-	if (rij <= rcut) {
+	if (rij <= rm) {
 		double f = 48.0 * (eps / rij) * (pow(sig / rij, 12) - ( pow(sig / rij, 6)/2));
+		return f;
+	}
+	else if (rm < rij && rij <= rcut) {
+		double x = (rij - rm) / (rcut - rm);
+		double f = 48.0 * (eps / rij) * (pow(sig / rij, 12) - (pow(sig / rij, 6) / 2))*(2 * pow(x, 3) - 3 * pow(x, 2) + 1);
+		f += -pot(rij)*(6 * pow(x, 2) - 6 * x) / (rcut - rm);
 		return f;
 	}
 	return 0.0;
@@ -108,9 +123,9 @@ double force1D(double* x1,double* F) {
 	for (int i = 0; i < N; i++) {
 		for (int j = i+1; j < N; j++) {
 			double rij = dist1D(x1[i], x1[j]);
-			double f = f1D(rij);
-			F[i] += -f;
-			F[j] += +f;
+			double f = f1D(abs(rij));
+			F[i] += -f*(rij/abs(rij));
+			F[j] += +f * (rij / abs(rij));
 			ep += pot(rij);
 			//cout << ep << endl;
 		}
@@ -134,11 +149,7 @@ double Verlet(double* x0, double* x1, double* v, double* F,double ep){
 		x0[i] = x1[i];
 		x1[i] = x2[i];
 	}
-	/*
-	for (int i = 0; i < N; i++) {
-		v[i] += -sumv/N; //On fixe la moyenne à 0
-	}
-	*/
+	
 	etot = ep + 0.5*m*sumvquad;
 	return etot;
 }
@@ -170,13 +181,14 @@ int main(){
 	
 	vector< tuple <double,double,double>> Energies;
 
+	//On calcul l'erreur sur l'énergie totale
 	double etot_init = Verlet(x0, x1, v, F, force1D(x1, F));
 	double etot_err = 0;
 
 	while (t < tmax) {
 		double ep = force1D(x1, F);
 		double etot=Verlet(x0, x1, v, F, ep);
-
+		
 		etot_err += abs(etot - etot_init);
 
 		if (tour%int(tau/deltaT)==0){
@@ -193,8 +205,7 @@ int main(){
 	}
 
 	etot_err /= (tmax / deltaT); //On divise par le nombre de valeurs
-	cout << "Erreur sur l'energie totale : " << etot_err << endl;
-
+	cout << "Erreur sur l'energie totale en pourcentage par rapport a l'energie initiale: " << etot_err/etot_init << endl;
 
 	
 	
