@@ -1,4 +1,4 @@
-project(modele)
+project(Modeles)
 
 cmake_minimum_required(VERSION 2.8.11)
 
@@ -24,9 +24,9 @@ find_package(OpenGL)
 add_definitions(-DBOOST_NO_CXX11_TEMPLATE_ALIASES)
 
 
-# The executable itself
-add_executable( modele main.cpp)
-
+# The executables 
+add_executable(modele_1d main.cpp)
+add_executable(modele_2d main_2d.cpp)
 
 SET(CMAKE_LIBRARY_PATH ${CMAKE_LIBRARY_PATH} "C:/Qt/5.10.1/msvc2017_64/lib")
 SET(CMAKE_LIBRARY_PATH ${CMAKE_LIBRARY_PATH} "C:/Qt/5.10.1/msvc2017_64/bin")
