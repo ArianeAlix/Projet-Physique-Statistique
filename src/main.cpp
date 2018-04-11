@@ -27,8 +27,6 @@ const double rcut = 2.5*sig;
 const double rm = 1.5*sig;
 
 // Constantes liées au temps
-const double deltaT = pow(10, -2);//pas de temps de la simulation
-const double tau = deltaT * 10;//pas d'échantillonnage des positions
 const double tmax = 100; //temps de la simulation
 
 void InitRandom()
@@ -44,13 +42,14 @@ double Random(double a, double b)
 
 
 double dist1D(double xi, double xj) {
-	//Doit prendre un compte la préiodicité
+	//Doit prendre en compte la périodicité
+	//cout << xj - xi << endl;
 	double rij = xj - xi - L * round(((xj - xi) / L));
 	return rij;
 }
 
 
-void init1D(double* x0,double* x1, double * v) {
+void init1D(double* x0,double* x1, double * v,double deltaT) {
 	//On choisit un segment de longueur N*a*sigma
 	//On place les particules de manière régulière sur le segment
 	//Et de façon à ce que la périodicité implique une régularité 
@@ -64,7 +63,7 @@ void init1D(double* x0,double* x1, double * v) {
 	for (int i = 0; i < N; i++) {
 		x1[i] = i * L/N + L/(2.0*N);
 		v[i] = distribution(generator);
-		sumv = +v[i];
+		sumv += v[i];
 		sumvquad += pow(v[i], 2);
 	}
 	double moyv = sumv / N;
@@ -115,6 +114,7 @@ double f1D(double rij) {
 	return 0.0;
 }
 
+
 double force1D(double* x1,double* F) {
 	double ep = 0;
 	for (int i = 0; i < N; i++) {
@@ -124,7 +124,8 @@ double force1D(double* x1,double* F) {
 		for (int j = i+1; j < N; j++) {
 			double rij = dist1D(x1[i], x1[j]);
 			double f = f1D(abs(rij));
-			F[i] += -f*(rij/abs(rij));
+			//cout << f << endl;
+			F[i] += -f * (rij/abs(rij));
 			F[j] += +f * (rij / abs(rij));
 			ep += pot(rij);
 			//cout << ep << endl;
@@ -134,7 +135,7 @@ double force1D(double* x1,double* F) {
 }
 
 
-double Verlet(double* x0, double* x1, double* v, double* F,double ep){
+double Verlet(double* x0, double* x1, double* v, double* F,double ep,double deltaT){
 	double sumv = 0;
 	double sumvquad = 0;
 	double x2[N];
@@ -143,30 +144,32 @@ double Verlet(double* x0, double* x1, double* v, double* F,double ep){
 	for (int i = 0; i < N; i++) {
 		x2[i] = 2 * x1[i] - x0[i] + pow(deltaT, 2)*F[i]; //On met à jour les positions
 		v[i]= (x2[i] - x0[i]) / (2 * deltaT);//On met à jour les vitesses
-		//cout << v[i] << endl;
 		sumv += v[i];
 		sumvquad += pow(v[i], 2);
 		x0[i] = x1[i];
 		x1[i] = x2[i];
 	}
-	
 	etot = ep + 0.5*m*sumvquad;
 	return etot;
 }
 
-void simulation() {
+
+//Ensemble de la simulation appelant toutes les fonctions nécessaires
+double simulation(double deltaT) { //Renvoie l'erreur
 	//Initialisation
 	double x0[N];
 	double x1[N];
 	double v[N];
 	double F[N];
-	init1D(x0, x1, v);
+	init1D(x0, x1, v, deltaT);
 	force1D(x1, F);
 
+	//Pour afficher les valeurs initiales
+	/*
 	for (int i = 0; i < N; i++) {
 		cout << i << ". Position: " << x1[i] << ", vitesse: " << v[i] << ", force: " << F[i] << endl;
 	}
-
+	*/
 
 	//Pour exportation des positions
 	ofstream positions;
@@ -178,7 +181,7 @@ void simulation() {
 	energies.open("Energie.txt");
 	energies << "En_tot Ep Ec \n";
 
-	double etot_init = Verlet(x0, x1, v, F, force1D(x1, F));
+	double etot_init = Verlet(x0, x1, v, F, force1D(x1, F), deltaT);
 	double etot_err = 0;
 
 	//Démarrer l'algorithme
@@ -187,11 +190,11 @@ void simulation() {
 
 	while (t < tmax) {
 		double ep = force1D(x1, F);
-		double etot = Verlet(x0, x1, v, F, ep);
+		double etot = Verlet(x0, x1, v, F, ep, deltaT);
 
 		etot_err += abs(etot - etot_init);
 
-		if (tour%int(tau / deltaT) == 0) {
+		if (tour%int(10) == 0) {
 			//On échantillonne tous les tau = 10*deltaT
 			energies << etot << " " << ep << " "<< etot - ep << "\n";
 			for (int i = 0; i < N; i++) {
@@ -205,8 +208,28 @@ void simulation() {
 
 	//On calcul l'erreur sur l'énergie totale
 	etot_err /= (tmax / deltaT); //On divise par le nombre de valeurs
-	cout << "Erreur sur l'energie totale par rapport a l'energie initiale: " << etot_err / etot_init * 100 << "%" << endl;
+	etot_err /= etot_init;
 
+	return etot_err;
+}
+
+
+
+void erreur_energie() {
+	//Lancer plusieurs simulations avec des deltaT différents
+	//pour tracer l'erreur en fonction de deltaT^2
+	ofstream erreur_en;
+	erreur_en.open("Erreur_energie.txt");
+	erreur_en << "deltaT etot_err \n";
+
+	double deltaT= pow(10, -5);
+	int compteur = 0;
+	for (int i = 0; i < 30; i ++) {
+		cout << "Simulation numero " << ++compteur << "..." << endl;
+		deltaT += 5*pow(10, -4);//pas de temps de la simulation
+		erreur_en << pow(deltaT,2) << " " << simulation(deltaT) << "\n"; 
+	}
+	cout << "Fin" << endl;
 }
 
 
@@ -215,10 +238,6 @@ int main(){
 	InitRandom();
 
 
-	//Lancement de la simulation
-	simulation();
-	
-	
 	//Test dérivée du potentiel -> force
 	//On enregistre les valeurs dans un fichier .txt
 	ofstream myfile;
@@ -227,8 +246,20 @@ int main(){
 	double step = (rcut - start) / 100;
 	myfile << "Distance Pot-prime Force \n";
 	for (double i = start; i < rcut; i += step) {
-		myfile << to_string(i)+" "+ to_string(-pot_prime(i)) + " " + to_string(f1D(i))+" \n";
+		myfile << to_string(i) + " " + to_string(-pot_prime(i)) + " " + to_string(f1D(i)) + " \n";
 	}
+
+
+	//Lancement d'une simulation
+	double deltaT = pow(10, -2);//pas de temps de la simulation
+	double etot_err=simulation(deltaT);
+	
+	cout << "Erreur sur l'energie totale par rapport a l'energie initiale: " << etot_err * 100 << "%" << endl;
+
+
+	//Pour pouvoir tracer l'erreur sur l'énergie en fonction du pas de temps
+	erreur_energie();
+
 
 	return 0;
 	}
