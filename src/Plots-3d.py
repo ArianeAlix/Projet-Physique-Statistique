@@ -12,7 +12,7 @@ def read_file (fn ):
 def energies():
     #Tracé des énergies cinétique, potentielle et totale
     plt.figure(figsize=(8,6))
-    Etot,Ep,Ec,names=read_file('./build/Energie_2d.txt')
+    Etot,Ep,Ec,names=read_file('./build/Energie_3d.txt')
     plt.plot(np.arange(0,np.size(Etot),1),Etot,'blue',label='Etot',linewidth=0.5)
     plt.plot(np.arange(0,np.size(Etot),1),Ep,'red',label='Ep',linewidth=0.5)
     plt.plot(np.arange(0,np.size(Etot),1),Ec,'green',label='Ec',linewidth=0.5)
@@ -24,7 +24,7 @@ energies()
 
 
 def temperatures():
-    with open ('./build/Temp_2d.txt') as f:
+    with open ('./build/Temp_3d.txt') as f:
         names =f. readline ()
         X=np. array ([[ float (x) for x in l. strip (). split (" ")] for l in f. readlines ()])
         for i in range (0,np.shape(X)[1]):
@@ -35,28 +35,6 @@ def temperatures():
             plt.show()
 
 temperatures()
-
-
-def positions():
-    with open ('./build/Positions_2d.txt') as f:
-        names =f. readline ()
-        X=np. array ([[ float (x) for x in l. strip (). split (" ")] for l in f. readlines ()])
-        
-        plt.figure(figsize=(8,6))
-        for i in range (0,int(np.shape(X)[1]/2)):
-            plt.plot(X[:,2*i+1],X[:,2*i],label='p'+str(i+1),linewidth=0.5)
-        plt.legend()
-        plt.show()
-        
-        
-positions()
-
-
-
-
-
-
-
 
 
 

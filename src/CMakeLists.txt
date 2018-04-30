@@ -27,6 +27,7 @@ add_definitions(-DBOOST_NO_CXX11_TEMPLATE_ALIASES)
 # The executables 
 add_executable(modele_1d main.cpp)
 add_executable(modele_2d main_2d.cpp)
+add_executable(modele_3d main_3d.cpp)
 
 SET(CMAKE_LIBRARY_PATH ${CMAKE_LIBRARY_PATH} "C:/Qt/5.10.1/msvc2017_64/lib")
 SET(CMAKE_LIBRARY_PATH ${CMAKE_LIBRARY_PATH} "C:/Qt/5.10.1/msvc2017_64/bin")

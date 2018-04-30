@@ -8,9 +8,11 @@ using namespace std;
 
 
 //Paramètres de la simulation
-const int N = 10;//nombre de particules
-const double T = 120;//température du système
-const double k = 1.3806485279*pow(10, -23);//constante de boltzmann
+const int N = 100;//nombre de particules
+const double T = 1;
+const double TR = 120;//température réelle du système
+const double kB = 1.3806485279*pow(10, -23);//constante de boltzmann
+const double k = 1; //réduit
 
 //Paramètres des particules
 const double sigR = 3.405*pow(10, -10);//sigma réelle
@@ -24,21 +26,10 @@ const double L = N * sig* a;
 
 //Dimensionnement du potentiel
 const double rcut = 2.5*sig;
-const double rm = 1.5*sig;
+const double rm = 1.8*sig;
 
 // Constantes liées au temps
-const double tmax = 100; //temps de la simulation
-
-void InitRandom()
-{
-	srand((unsigned int)time(0));
-}
-
-double Random(double a, double b)
-{
-	double x = double(rand()) / RAND_MAX;
-	return a + (b - a)*x;
-}
+const double tmax = 10; //temps de la simulation
 
 
 double dist1D(double xi, double xj) {
@@ -49,29 +40,42 @@ double dist1D(double xi, double xj) {
 }
 
 
-void init1D(double* x0,double* x1, double * v,double deltaT) {
+void init1D(double* x1, double * p,double deltaT) {
 	//On choisit un segment de longueur N*a*sigma
 	//On place les particules de manière régulière sur le segment
 	//Et de façon à ce que la périodicité implique une régularité 
 	//des distances entre toutes les particules
 	unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-	default_random_engine generator(seed);
+	//default_random_engine generator(0); //Si l'on veut tracer des paramètres/valeur pour une même simulation
+	default_random_engine generator(seed); 
 	normal_distribution<double> distribution(0, eps/m);
 	double en = 0.0;//energy of the whole system
-	double sumv = 0.0;
-	double sumvquad = 0.0;
+	double sump = 0.0;
+	double sumpquad = 0.0;
+
 	for (int i = 0; i < N; i++) {
 		x1[i] = i * L/N + L/(2.0*N);
-		v[i] = distribution(generator);
-		sumv += v[i];
-		sumvquad += pow(v[i], 2);
+		p[i] = distribution(generator)*m;
+		sump += p[i];
+		sumpquad += pow(p[i], 2);
 	}
-	double moyv = sumv / N;
-	double moyvquad = sumvquad / N;
+	double moyp = sump / N;
+	double moypquad = sumpquad / N;
 	for (int i = 0; i < N; i++) {
-		v[i] += -moyv; //On fixe la moyenne à 0
-		x0[i] = x1[i] - v[i] * deltaT;
+		p[i] += -moyp; //On fixe la moyenne à 0
 	}
+
+	/*
+	for (int i = 0; i < N; i++) {
+		for (int j = i + 1; j < N; j++) {
+			double dist = dist1D(x1[i], x1[j]);
+			cout << i << "," << j << ": "<< dist <<endl;
+		}
+	}
+
+	*/
+	
+
 }
 
 double pot(double rij) {
@@ -91,10 +95,8 @@ double pot(double rij) {
 
 double pot_prime(double rij) {
 	double h = pow(10, -8);
-	if (rij <= rcut) {
-		double pp = (pot(rij + h) - pot(rij-h)) / (2*h);
-		return pp;
-	}
+	double pp = (pot(rij + h) - pot(rij-h)) / (2*h);
+	return pp;
 	return 0.0;
 }
 
@@ -108,15 +110,35 @@ double f1D(double rij) {
 	else if (rm < rij && rij <= rcut) {
 		double x = (rij - rm) / (rcut - rm);
 		double f = 48.0 * (eps / rij) * (pow(sig / rij, 12) - (pow(sig / rij, 6) / 2))*(2 * pow(x, 3) - 3 * pow(x, 2) + 1);
-		f += -pot(rij)*(6 * pow(x, 2) - 6 * x) / (rcut - rm);
+		f += -4 * eps * (pow(sig / rij, 12) - pow(sig / rij, 6))*(6 * pow(x, 2) - 6 * x) / (rcut - rm);
 		return f;
 	}
 	return 0.0;
 }
 
+double laplacien(double rij) {
+	// On distingue  les cas r<>rcut=2.5*sigma
+	if (rij <= rm) {
+		double f = 48.0 * (eps / pow(rij,2)) * (13*pow(sig / rij, 12) - (7/2)*(pow(sig / rij, 6) / 2));
+		return f;
+	}
+	else if (rm < rij && rij <= rcut) {
+		double x = (rij - rm) / (rcut - rm);
+		double f = 48.0 * (eps / pow(rij, 2)) * (13 * pow(sig / rij, 12) - (7 / 2)*(pow(sig / rij, 6) / 2))*(2 * pow(x, 3) - 3 * pow(x, 2) + 1);
+		f += 2*(-48.0 * (eps / rij) * (pow(sig / rij, 12) - (pow(sig / rij, 6) / 2))*(6 * pow(x, 2) - 6 * x) / (rcut - rm));
+		f += 4 * eps * (pow(sig / rij, 12) - pow(sig / rij, 6))*(12 * x-6) / pow((rcut - rm), 2);
+		return f;
+	}
+	return 0.0;
 
-double force1D(double* x1,double* F) {
+
+}
+
+double force1D(double* x1,double* F,double& moygradquad, double& moylaplace) {
 	double ep = 0;
+	moygradquad = 0;
+	moylaplace = 0;
+
 	for (int i = 0; i < N; i++) {
 		F[i] = 0;
 	}
@@ -124,6 +146,8 @@ double force1D(double* x1,double* F) {
 		for (int j = i+1; j < N; j++) {
 			double rij = dist1D(x1[i], x1[j]);
 			double f = f1D(abs(rij));
+			moygradquad += pow(f,2);
+			moylaplace += laplacien(abs(rij));
 			//cout << f << endl;
 			F[i] += -f * (rij/abs(rij));
 			F[j] += +f * (rij / abs(rij));
@@ -131,38 +155,54 @@ double force1D(double* x1,double* F) {
 			//cout << ep << endl;
 		}
 	}
+	moygradquad /= N*(N-1)/2;
+	moylaplace /= N * (N - 1) / 2;
 	return ep;
 }
 
 
-double Verlet(double* x0, double* x1, double* v, double* F,double ep,double deltaT){
-	double sumv = 0;
-	double sumvquad = 0;
+double Verlet(double* x1, double* p, double& ep, double& moygradquad, double& moylaplace, double* F, double deltaT){
+	double sump = 0;
+	double sumpquad = 0;
 	double x2[N];
 	double etot = 0;
+	double p_inter[N];
 
 	for (int i = 0; i < N; i++) {
-		x2[i] = 2 * x1[i] - x0[i] + pow(deltaT, 2)*F[i]; //On met à jour les positions
-		v[i]= (x2[i] - x0[i]) / (2 * deltaT);//On met à jour les vitesses
-		sumv += v[i];
-		sumvquad += pow(v[i], 2);
-		x0[i] = x1[i];
-		x1[i] = x2[i];
+		sump += p[i];
+		sumpquad += pow(p[i], 2);
+		
+		p_inter[i] = p[i] + (deltaT / 2)*F[i];//quantité de mvt intermédiaire 
+
+		x2[i] = x1[i] + deltaT*(p_inter[i]/m);
+
 	}
-	etot = ep + 0.5*m*sumvquad;
+
+	ep = force1D(x2, F, moygradquad, moylaplace); //On recalcule les forces pour les nouvelles positions
+
+	for (int i = 0; i < N; i++) {
+		p[i] = p_inter[i]+(deltaT / 2)*F[i];//On met à jour la quantité de mvt avec les nouvelles forces
+
+		x1[i] = x2[i];//On enregistre les nouvelles positions
+	}
+
+	etot = ep + 0.5*sumpquad/m;
 	return etot;
 }
 
 
 //Ensemble de la simulation appelant toutes les fonctions nécessaires
-double simulation(double deltaT) { //Renvoie l'erreur
+double simulation(double deltaT,double& emin, double& emax) { //Renvoie l'erreur
 	//Initialisation
-	double x0[N];
 	double x1[N];
-	double v[N];
+	double p[N];
 	double F[N];
-	init1D(x0, x1, v, deltaT);
-	force1D(x1, F);
+	init1D( x1, p, deltaT);
+	double moygradquad;
+	double moylaplace;
+
+	double ep= force1D(x1, F,moygradquad,moylaplace);
+
 
 	//Pour afficher les valeurs initiales
 	/*
@@ -170,6 +210,7 @@ double simulation(double deltaT) { //Renvoie l'erreur
 		cout << i << ". Position: " << x1[i] << ", vitesse: " << v[i] << ", force: " << F[i] << endl;
 	}
 	*/
+	
 
 	//Pour exportation des positions
 	ofstream positions;
@@ -181,22 +222,37 @@ double simulation(double deltaT) { //Renvoie l'erreur
 	energies.open("Energie.txt");
 	energies << "En_tot Ep Ec \n";
 
-	double etot_init = Verlet(x0, x1, v, F, force1D(x1, F), deltaT);
-	double etot_err = 0;
+	//Exportation de la température
+	ofstream temperatures;
+	temperatures.open("Temp.txt");
+	temperatures << "Tc Tp \n";
 
+	double etot_init = Verlet( x1, p, ep, moygradquad, moylaplace, F,deltaT);
+	emin = etot_init;
+	emax = etot_init;
+	double etot_err = 0;
+	
 	//Démarrer l'algorithme
 	double t = 0;
 	int tour = 0;
 
 	while (t < tmax) {
-		double ep = force1D(x1, F);
-		double etot = Verlet(x0, x1, v, F, ep, deltaT);
+		//double ep = force1D(x1, F);
+		double etot = Verlet( x1, p, ep, moygradquad, moylaplace, F, deltaT);
+
+		if (etot > emax) {
+			emax = etot;
+		}
+		if (etot < emin) {
+			emin = etot;
+		}
 
 		etot_err += abs(etot - etot_init);
 
 		if (tour%int(10) == 0) {
 			//On échantillonne tous les tau = 10*deltaT
 			energies << etot << " " << ep << " "<< etot - ep << "\n";
+			temperatures << 2*(etot - ep)/(N*k) << " " << moygradquad/moylaplace << "\n";
 			for (int i = 0; i < N; i++) {
 				positions << x1[i] << " ";
 			}
@@ -222,12 +278,18 @@ void erreur_energie() {
 	erreur_en.open("Erreur_energie.txt");
 	erreur_en << "deltaT etot_err \n";
 
-	double deltaT= pow(10, -5);
+	double deltaT= pow(10, -4);
 	int compteur = 0;
-	for (int i = 0; i < 30; i ++) {
+	
+
+	for (int i = 0; i < 10; i ++) {
+		double emin, emax;
 		cout << "Simulation numero " << ++compteur << "..." << endl;
-		deltaT += 5*pow(10, -4);//pas de temps de la simulation
-		erreur_en << pow(deltaT,2) << " " << simulation(deltaT) << "\n"; 
+
+		simulation(deltaT, emin, emax);
+
+		deltaT += pow(10, -3);//pas de temps de la simulation
+		erreur_en << pow(deltaT,2) << " " << (emax-emin) << "\n"; 
 	}
 	cout << "Fin" << endl;
 }
@@ -235,8 +297,6 @@ void erreur_energie() {
 
 
 int main(){
-	InitRandom();
-
 
 	//Test dérivée du potentiel -> force
 	//On enregistre les valeurs dans un fichier .txt
@@ -244,22 +304,30 @@ int main(){
 	myfile.open("Derivee.txt");
 	double start = 1;
 	double step = (rcut - start) / 100;
+	double err_pot = 0;
+	int iter = 0; //Nb d'itérations pour calculer l'erreur
 	myfile << "Distance Pot-prime Force \n";
 	for (double i = start; i < rcut; i += step) {
 		myfile << to_string(i) + " " + to_string(-pot_prime(i)) + " " + to_string(f1D(i)) + " \n";
+		err_pot += (abs(f1D(i) + pot_prime(i)))/ pot_prime(i); //erreur relative
+		iter += 1;
 	}
+	err_pot /= iter;//On diviser l'erreur totale par le nombre d'itérations
+	cout << "Erreur relative de la force par rapport a la derivee du potentiel: " << err_pot * 100 << "%" << endl;
+
 
 
 	//Lancement d'une simulation
-	double deltaT = pow(10, -2);//pas de temps de la simulation
-	double etot_err=simulation(deltaT);
+	double deltaT = pow(10, -3);//pas de temps de la simulation
+	double emin, emax;
+	double etot_err=simulation(deltaT,emin,emax);
 	
 	cout << "Erreur sur l'energie totale par rapport a l'energie initiale: " << etot_err * 100 << "%" << endl;
 
-
+	/*
 	//Pour pouvoir tracer l'erreur sur l'énergie en fonction du pas de temps
 	erreur_energie();
-
+	*/
 
 	return 0;
 	}
