@@ -29,11 +29,12 @@ const double rcut = 2.5*sig;
 const double rm = 1.8*sig;
 
 // Constantes liées au temps
-const double tmax = 0.04; //temps de la simulation
+const double tmax = 10; //temps de la simulation
 
 
 double* dist2D(double* qi, double* qj){
-	double dist[2];
+    double* dist;
+    dist=(double*)malloc(2);
 	//Doit prendre un compte la périodicité
 
 	dist[0] = qj[0] - qi[0] - L * round((qj[0] - qi[0]) / L);
@@ -42,12 +43,12 @@ double* dist2D(double* qi, double* qj){
 }
 
 
-void init2D(double (&q1)[N][2], double (&p)[N][2], double deltaT) {
+void init2D(double (&q1)[N][2], double (&p)[N][2]) {
 
 	unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+	//default_random_engine generator(0); //Si l'on veut tracer des paramètres/valeur pour une même simulation
 	default_random_engine generator(seed);
 	normal_distribution<double> distribution(0, eps/m);
-	double en = 0.0;//energy of the whole system
 	double sump[2] = { 0,0 };
 	double sumpquad = 0;
 	for (int i = 0; i < N; i++) {
@@ -93,7 +94,6 @@ double pot(double rij) {
 		return p;
 	}
 	return 0.0;
-
 }
 
 
@@ -112,13 +112,70 @@ double f1D(double rij) {
 	return 0.0;
 }
 
+double derivee2(double rij) {// en 1D correspond à la dérivée seconde
+							 // On distingue  les cas r<>rcut=2.5*sigma
+	if (rij <= rm) {
+		double f = 48.0 * (eps / pow(rij, 2)) * (13 * pow(sig / rij, 12) - (7 / 2)*(pow(sig / rij, 6)));
+		return f;
+	}
+	else if (rm < rij && rij <= rcut) {
+		double x = (rij - rm) / (rcut - rm);
+		double f = 48.0 * (eps / pow(rij, 2)) * (13 * pow(sig / rij, 12) - (7 / 2)*(pow(sig / rij, 6)))*(2 * pow(x, 3) - 3 * pow(x, 2) + 1);
+		f += 2 * (-48.0 * (eps / rij) * (pow(sig / rij, 12) - (pow(sig / rij, 6) / 2))*(6 * pow(x, 2) - 6 * x) / (rcut - rm));
+		f += 4 * eps * (pow(sig / rij, 12) - pow(sig / rij, 6))*(12 * x - 6) / pow((rcut - rm), 2);
+		return f;
+	}
+	return 0.0;
+}
 
-double force2D(double(&q1)[N][2],double(&F)[N][2]) {
+
+//return the total potential of the configuration q1
+double potential_tot(double(&q1)[N][2]) {
+	double potential = 0;
+	for (int i = 0; i < N; i++) {
+		for (int j = i + 1; j < N; j++) {
+			double rij[2] = { dist2D(q1[i], q1[j])[0], dist2D(q1[i], q1[j])[1] };
+			double dist = sqrt(pow(rij[0], 2) + pow(rij[1], 2));
+			potential += pot(dist);
+		}
+	}
+	return potential;
+}
+
+
+//return the laplacian
+double laplacian(double(&q1)[N][2]) {
+	double laplace = 0;
+	double dV[N];
+
+	for (int i = 0; i < N; i++) {
+		for (int j = i + 1; j < N; j++) {
+			double rij[2] = { dist2D(q1[i], q1[j])[0], dist2D(q1[i], q1[j])[1] };
+			double dist = sqrt(pow(rij[0], 2) + pow(rij[1], 2));
+            dV[i] += derivee2(dist) + f1D(dist)*1/dist;
+            dV[j] += derivee2(dist) + f1D(dist)*1 / dist;
+		}
+	}
+	for (int i = 0; i < N; i++) {
+		laplace += dV[i];
+	}
+
+	return laplace;
+}
+
+
+//F equals to the vector -grad
+double force2D(double(&q1)[N][2],double(&F)[N][2], double& moygradquad, double& moylaplace) {
 	double ep = 0;
+	moygradquad = 0;
+	moylaplace = 0;
+	double laplace[N];
 	for (int i = 0; i < N; i++) {
 		F[i][0] = 0;
 		F[i][1] = 0;
+		laplace[i] = 0;
 	}
+	
 	for (int i = 0; i < N; i++) {
 		for (int j = i+1; j < N; j++) {
 			double rij[2] = { dist2D(q1[i], q1[j])[0], dist2D(q1[i], q1[j])[1]};
@@ -126,12 +183,13 @@ double force2D(double(&q1)[N][2],double(&F)[N][2]) {
 			double f = f1D(dist);//Valeur de la force
 			//cout << dist << " ; " << f << endl;
 			//Direction ?
-			
-			F[i][0] += +f * rij[0] / dist;
-			//cout << rij[0] << " : " <<dist << " : "<< f <<endl;
-			F[i][1] += +f * rij[1] / dist;
-			F[j][0] += -f * rij[0] / dist;
-			F[j][1] += -f * rij[1] / dist;
+			laplace[i] += derivee2(dist);
+			laplace[j] += derivee2(dist);
+
+			F[i][0] += -f * rij[0] / dist;
+			F[i][1] += -f * rij[1] / dist;
+			F[j][0] += +f * rij[0] / dist;
+			F[j][1] += +f * rij[1] / dist;
 			
 			
 			ep += pot(dist);
@@ -139,12 +197,20 @@ double force2D(double(&q1)[N][2],double(&F)[N][2]) {
 		}
 		//cout << F[i][0] << " , " << F[i][1] << endl;
 	}
+	for (int i = 0; i < N; i++) {
+		moygradquad += pow(F[i][0], 2)+ pow(F[i][1], 2);
+		//cout << moylaplace << endl;
+		moylaplace += laplace[i];
+	}
+
+	moygradquad /= N;
+	moylaplace /= N;
 	return ep;
 }
 
 
 
-double Verlet(double(&q1)[N][2], double(&p)[N][2], double(&F)[N][2], double ep, double deltaT) {
+double Verlet(double(&q1)[N][2], double(&p)[N][2], double& ep, double& moygradquad, double& moylaplace, double(&F)[N][2], double deltaT) {
 	double sump[2] = { 0,0 };
 	double sumpquad = 0;
 	double q2[N][2];
@@ -165,7 +231,7 @@ double Verlet(double(&q1)[N][2], double(&p)[N][2], double(&F)[N][2], double ep, 
 
 	}
 
-	ep = force2D(q2, F); //On recalcule les forces pour les nouvelles positions
+	ep = force2D(q2, F, moygradquad, moylaplace); //On recalcule les forces pour les nouvelles positions
 
 	for (int i = 0; i < N; i++) {
 		p[i][0] = p_inter[i][0] + (deltaT / 2)*F[i][0];//On met à jour la quantité de mvt avec les nouvelles forces
@@ -180,21 +246,25 @@ double Verlet(double(&q1)[N][2], double(&p)[N][2], double(&F)[N][2], double ep, 
 }
 
 
+
 //Ensemble de la simulation appelant toutes les fonctions nécessaires
-double simulation(double deltaT) { //Renvoie l'erreur
-								   //Initialisation
+double simulation(double deltaT, double& emin, double& emax) { //Renvoie l'erreur
+															   //Initialisation
 	double q1[N][2];
 	double p[N][2];
 	double F[N][2];
-	init2D(q1, p, deltaT);
-	force2D(q1, F);
+    init2D(q1, p);
+	double moygradquad;
+	double moylaplace;
 
 	//Pour afficher les valeurs initiales
-	
+	/*
 	for (int i = 0; i < N; i++) {
-	cout << i << ". Position: " << q1[i][0] <<"," << q1[i][1] << ", vitesse: " << p[i][0] << "," << p[i][1] << ", force: " << F[i][0] << "," << F[i][1] << endl;
+		cout << i << ". Position: " << q1[i][0] << "," << q1[i][1] << ", vitesse: " << p[i][0] << "," << p[i][1] << ", force: " << F[i][0] << "," << F[i][1] << endl;
 	}
-	
+	*/
+	double ep = force2D(q1, F, moygradquad, moylaplace);
+
 
 	//Pour exportation des positions
 	ofstream positions;
@@ -212,7 +282,9 @@ double simulation(double deltaT) { //Renvoie l'erreur
 	temperatures << "Tc Tp \n";
 
 
-	double etot_init = Verlet( q1, p, F, force2D(q1, F), deltaT);
+	double etot_init = Verlet(q1, p, ep, moygradquad, moylaplace, F, deltaT);
+	emin = etot_init;
+	emax = etot_init;
 	double etot_err = 0;
 
 	//Démarrer l'algorithme
@@ -220,8 +292,15 @@ double simulation(double deltaT) { //Renvoie l'erreur
 	int tour = 0;
 
 	while (t < tmax) {
-		double ep = force2D(q1, F);
-		double etot = Verlet( q1, p, F, ep, deltaT);
+		//double ep = force1D(x1, F);
+		double etot = Verlet(q1, p, ep, moygradquad, moylaplace, F, deltaT);
+
+		if (etot > emax) {
+			emax = etot;
+		}
+		if (etot < emin) {
+			emin = etot;
+		}
 
 		etot_err += abs(etot - etot_init);
 
@@ -229,7 +308,7 @@ double simulation(double deltaT) { //Renvoie l'erreur
 			//On échantillonne tous les tau = 10*deltaT
 			//cout << ep << endl;
 			energies << etot << " " << ep << " " << etot - ep << "\n";
-			temperatures << 2 * (etot - ep) / (N*k) << " " << 2 * ep / (N*k) << "\n";
+			temperatures << 2 * (etot - ep) / (N*k*2) << " " << moygradquad / moylaplace << "\n";
 			for (int i = 0; i < N; i++) {
 				positions << q1[i][0] << " " << q1[i][1] << " ";
 			}
@@ -246,8 +325,6 @@ double simulation(double deltaT) { //Renvoie l'erreur
 	return etot_err;
 }
 
-/*
-
 void erreur_energie() {
 	//Lancer plusieurs simulations avec des deltaT différents
 	//pour tracer l'erreur en fonction de deltaT^2
@@ -255,22 +332,30 @@ void erreur_energie() {
 	erreur_en.open("Erreur_energie_2d.txt");
 	erreur_en << "deltaT etot_err \n";
 
-	double deltaT = pow(10, -5);
+
+	double deltaT = pow(10, -4);
 	int compteur = 0;
-	for (int i = 0; i < 30; i++) {
+
+
+	for (int i = 0; i < 10; i++) {
+		double emin, emax;
 		cout << "Simulation numero " << ++compteur << "..." << endl;
-		deltaT += 5 * pow(10, -4);//pas de temps de la simulation
-		erreur_en << pow(deltaT, 2) << " " << simulation(deltaT) << "\n";
+
+		simulation(deltaT, emin, emax);
+
+		deltaT += pow(10, -3);//pas de temps de la simulation
+		erreur_en << pow(deltaT, 2) << " " << (emax - emin) << "\n";
 	}
 	cout << "Fin" << endl;
 }
 
-*/
 
 
 void perturbation(double(&q1)[N][2], double delt[N][2]) {
 	double q2[N][2];
 	double q3[N][2];
+	double moygradquad;
+	double moylaplace;
 
 	for (int i = 0; i < N; i++) {
 		//On copie la configuration initiale en 2 nouvelles config, avec la perturbation en delta
@@ -283,49 +368,39 @@ void perturbation(double(&q1)[N][2], double delt[N][2]) {
 	}
 
 	// On calcule la différence de potentiel pour chaque particule
-	double diff_pot=0;
-
-	for (int i = 0; i < N; i++) {
-		for (int j = i + 1; j < N; j++) {
-			double rij2[2] = { dist2D(q2[i], q2[j])[0], dist2D(q2[i], q2[j])[1] };
-			double rij3[2] = { dist2D(q3[i], q3[j])[0], dist2D(q3[i], q3[j])[1] };
-
-			double dist2 = sqrt(pow(rij2[0], 2) + pow(rij2[1], 2));
-			double dist3 = sqrt(pow(rij3[0], 2) + pow(rij3[1], 2));
-
-			diff_pot += pot(dist3) - pot(dist2);
-		}
-	}
+	double diff_pot = potential_tot(q3) - potential_tot(q2);
 
 	double F1[N][2];
-	force2D(q1, F1);
+	force2D(q1, F1,moygradquad,moylaplace);
 	//On calcule la force qui s'applique pour 
 	//en déduire le gradient * delta sur chaque particule
 
 	double grad_pot_delt=0;
 
 	for (int i = 0; i < N; i++) {
-		grad_pot_delt += -(F1[i][0] * delt[i][0] + F1[i][1] * delt[i][1]);
+		grad_pot_delt += (-F1[i][0] * delt[i][0] - F1[i][1] * delt[i][1]);
 	}
 
-	cout << diff_pot -2* grad_pot_delt << endl;
+	cout << diff_pot << " , " << 2* grad_pot_delt << endl;
 
 }
 
 int main() {
-	
+	double emin, emax;
 	//Lancement d'une simulation
-	double deltaT = pow(10, -3);//pas de temps de la simulation
-	double etot_err = simulation(deltaT);
+	double deltaT = pow(10, -4);//pas de temps de la simulation
+	double etot_err = simulation(deltaT,emin,emax);
 
 	cout << "Erreur sur l'energie totale par rapport a l'energie initiale: " << etot_err * 100 << "%" << endl;
 
-	/*
+	
 	//Pour pouvoir tracer l'erreur sur l'énergie en fonction du pas de temps
-	erreur_energie();
+	//erreur_energie(); //Déjà fait une fois
+	
 
-	*/
-
+	
+	//// Validation du gradient en étudiant la différence de potentiel entre deux systèmes perturbés
+	/*
 	double q1[N][2];
 	double v[N][2];
 	double F[N][2];
@@ -351,7 +426,7 @@ int main() {
 	}
 
 	perturbation(q1, delt);
-
+	*/
 
 
 	return 0;

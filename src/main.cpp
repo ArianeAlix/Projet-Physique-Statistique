@@ -40,7 +40,7 @@ double dist1D(double xi, double xj) {
 }
 
 
-void init1D(double* x1, double * p,double deltaT) {
+void init1D(double* x1, double * p) {
 	//On choisit un segment de longueur N*a*sigma
 	//On place les particules de manière régulière sur le segment
 	//Et de façon à ce que la périodicité implique une régularité 
@@ -49,7 +49,6 @@ void init1D(double* x1, double * p,double deltaT) {
 	//default_random_engine generator(0); //Si l'on veut tracer des paramètres/valeur pour une même simulation
 	default_random_engine generator(seed); 
 	normal_distribution<double> distribution(0, eps/m);
-	double en = 0.0;//energy of the whole system
 	double sump = 0.0;
 	double sumpquad = 0.0;
 
@@ -90,16 +89,25 @@ double pot(double rij) {
 		return p;
 	}
 	return 0.0;
-
 }
+
+double pot_real(double rij) {
+	double p = 4 * eps * (pow(sig / rij, 12) - pow(sig / rij, 6));
+	return p;
+}
+
 
 double pot_prime(double rij) {
 	double h = pow(10, -8);
 	double pp = (pot(rij + h) - pot(rij-h)) / (2*h);
 	return pp;
-	return 0.0;
 }
 
+double pot_prime_prime(double rij) {
+	double h = pow(10, -5);
+	double pp = (pot_prime(rij + h) - pot_prime(rij - h)) / (2 * h);
+	return pp;
+}
 
 double f1D(double rij) {
 	// On distingue  les cas r<>rcut=2.5*sigma
@@ -116,47 +124,56 @@ double f1D(double rij) {
 	return 0.0;
 }
 
-double laplacien(double rij) {
+double derivee2(double rij) {// en 1D correspond à la dérivée seconde
 	// On distingue  les cas r<>rcut=2.5*sigma
 	if (rij <= rm) {
-		double f = 48.0 * (eps / pow(rij,2)) * (13*pow(sig / rij, 12) - (7/2)*(pow(sig / rij, 6) / 2));
+		double f = 48.0 * (eps / pow(rij,2)) * (13*pow(sig / rij, 12) - (7/2)*(pow(sig / rij, 6)));
 		return f;
 	}
 	else if (rm < rij && rij <= rcut) {
 		double x = (rij - rm) / (rcut - rm);
-		double f = 48.0 * (eps / pow(rij, 2)) * (13 * pow(sig / rij, 12) - (7 / 2)*(pow(sig / rij, 6) / 2))*(2 * pow(x, 3) - 3 * pow(x, 2) + 1);
+		double f = 48.0 * (eps / pow(rij, 2)) * (13 * pow(sig / rij, 12) - (7 / 2)*(pow(sig / rij, 6)))*(2 * pow(x, 3) - 3 * pow(x, 2) + 1);
 		f += 2*(-48.0 * (eps / rij) * (pow(sig / rij, 12) - (pow(sig / rij, 6) / 2))*(6 * pow(x, 2) - 6 * x) / (rcut - rm));
 		f += 4 * eps * (pow(sig / rij, 12) - pow(sig / rij, 6))*(12 * x-6) / pow((rcut - rm), 2);
 		return f;
 	}
 	return 0.0;
-
-
 }
+
+
 
 double force1D(double* x1,double* F,double& moygradquad, double& moylaplace) {
 	double ep = 0;
 	moygradquad = 0;
 	moylaplace = 0;
-
+	double laplace[N];
 	for (int i = 0; i < N; i++) {
 		F[i] = 0;
+		laplace[i] = 0;
 	}
+
 	for (int i = 0; i < N; i++) {
 		for (int j = i+1; j < N; j++) {
 			double rij = dist1D(x1[i], x1[j]);
 			double f = f1D(abs(rij));
-			moygradquad += pow(f,2);
-			moylaplace += laplacien(abs(rij));
+			//cout << abs(rij) << " , " <<f <<" , " << derivee2(abs(rij)) << endl;
+			laplace[i] += derivee2(abs(rij));
+			laplace[j] += derivee2(abs(rij));
 			//cout << f << endl;
 			F[i] += -f * (rij/abs(rij));
 			F[j] += +f * (rij / abs(rij));
-			ep += pot(rij);
+			ep += pot(abs(rij));
 			//cout << ep << endl;
 		}
 	}
-	moygradquad /= N*(N-1)/2;
-	moylaplace /= N * (N - 1) / 2;
+	for (int i = 0; i < N; i++) {
+		moygradquad += pow(F[i], 2);
+		//cout << moylaplace << endl;
+		moylaplace += laplace[i];
+	}
+
+	moygradquad /=N ;
+	moylaplace /= N ;
 	return ep;
 }
 
@@ -197,7 +214,7 @@ double simulation(double deltaT,double& emin, double& emax) { //Renvoie l'erreur
 	double x1[N];
 	double p[N];
 	double F[N];
-	init1D( x1, p, deltaT);
+    init1D( x1, p);
 	double moygradquad;
 	double moylaplace;
 
@@ -301,19 +318,30 @@ int main(){
 	//Test dérivée du potentiel -> force
 	//On enregistre les valeurs dans un fichier .txt
 	ofstream myfile;
+	ofstream myfile2;
 	myfile.open("Derivee.txt");
+	myfile2.open("Derivee2.txt");
 	double start = 1;
 	double step = (rcut - start) / 100;
 	double err_pot = 0;
+	double err_pot2 = 0;
 	int iter = 0; //Nb d'itérations pour calculer l'erreur
+
 	myfile << "Distance Pot-prime Force \n";
+	myfile2 << "Distance Pot-prime-prime Laplacien \n";
+
 	for (double i = start; i < rcut; i += step) {
 		myfile << to_string(i) + " " + to_string(-pot_prime(i)) + " " + to_string(f1D(i)) + " \n";
 		err_pot += (abs(f1D(i) + pot_prime(i)))/ pot_prime(i); //erreur relative
+
+		myfile2 << to_string(i) + " " + to_string(pot_prime_prime(i)) + " " + to_string(derivee2(i)) + " \n";
+		err_pot2 += (abs(derivee2(i) - pot_prime_prime(i))) / pot_prime_prime(i); //erreur relative
 		iter += 1;
 	}
-	err_pot /= iter;//On diviser l'erreur totale par le nombre d'itérations
+	err_pot /= iter;//On divise l'erreur totale par le nombre d'itérations
+	err_pot2 /= iter;
 	cout << "Erreur relative de la force par rapport a la derivee du potentiel: " << err_pot * 100 << "%" << endl;
+	cout << "Erreur relative de la derivee seconde par rapport a la difference finie seconde du potentiel: " << err_pot2 * 100 << "%" << endl;
 
 
 

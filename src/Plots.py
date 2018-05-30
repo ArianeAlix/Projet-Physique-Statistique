@@ -1,3 +1,6 @@
+#coding=utf-8
+
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -11,7 +14,7 @@ def read_file (fn ):
     
 #Tracé de - la dérivée du potentiel et de f pour vérifier la correspondance
 plt.figure(figsize=(6,6))    
-r,pot_prim,f,names=read_file('./build/Derivee.txt')
+r,pot_prim,f,names=read_file('./Derivee.txt')
 plt.plot(r,pot_prim,'blue',label='-dV/dr')
 plt.plot(r,f,'red',label='f')
 plt.axhline(0, color='black',linewidth=0.5)
@@ -19,10 +22,18 @@ plt.title("Force et opposé de la dérivée du potentiel")
 plt.legend()
 plt.show()
 
+plt.figure(figsize=(6,6))    
+r,pot_prim,f,names=read_file('./Derivee2.txt')
+plt.plot(r,pot_prim,'blue',label='-d2V/dr2')
+plt.plot(r,f,'red',label="Dérivée seconde (-f')")
+plt.axhline(0, color='black',linewidth=0.5)
+plt.legend()
+plt.show()
+
 def energies():
     #Tracé des énergies cinétique, potentielle et totale
     plt.figure(figsize=(8,6))
-    Etot,Ep,Ec,names=read_file('./build/Energie.txt')
+    Etot,Ep,Ec,names=read_file('./Energie.txt')
     times=10**(-2)*np.arange(0,np.size(Etot),1)
     plt.plot(times,Etot,'blue',label='Etot',linewidth=0.5)
     plt.plot(times,Ep,'red',label='Ep',linewidth=0.5)
@@ -34,8 +45,9 @@ def energies():
 energies()
 
 
+
 def temperatures():
-    with open ('./build/Temp.txt') as f:
+    with open ('./Temp.txt') as f:
         names =f. readline ()
         X=np. array ([[ float (x) for x in l. strip (). split (" ")] for l in f. readlines ()])
         for i in range (0,np.shape(X)[1]):
@@ -50,23 +62,23 @@ temperatures()
 
 
 def positions():
-    with open ('./build/Positions.txt') as f:
+    with open ('./Positions.txt') as f:
         names =f. readline ()
         X=np. array ([[ float (x) for x in l. strip (). split (" ")] for l in f. readlines ()])
         
         plt.figure(figsize=(8,6))
         for i in range (0,np.shape(X)[1]):
-            plt.plot(X[:,i],10**(-2)*np.arange(0,np.size(X[:,i]),1),'blue',label='p'+str(i+1),linewidth=0.5)
+            plt.plot(X[:,i],10**(-2)*np.arange(0,np.size(X[:,i]),1),'blue',linewidth=0.5)
         plt.legend()
         plt.show()
 
 positions()
 
 
-#Tracé de l'erreur en focntion de log_10(deltaT)
+#Tracé de l'erreur en fonction de log_10(deltaT)
 
 def erreur():
-    with open ('./build/Erreur_energie.txt') as f:
+    with open ('./Erreur_energie.txt') as f:
         names =f. readline ()
         X=np. array ([[ float (x) for x in l. strip (). split (" ")] for l in f. readlines ()])
     plt.figure(figsize=(8,6))
