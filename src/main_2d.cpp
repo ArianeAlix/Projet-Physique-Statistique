@@ -147,6 +147,9 @@ double potential_tot(double(&q1)[N][2]) {
 double laplacian(double(&q1)[N][2]) {
 	double laplace = 0;
 	double dV[N];
+	for (int i = 0; i < N; i++) {
+		dV[i] = 0;
+	}
 
 	for (int i = 0; i < N; i++) {
 		for (int j = i + 1; j < N; j++) {
@@ -169,11 +172,10 @@ double force2D(double(&q1)[N][2],double(&F)[N][2], double& moygradquad, double& 
 	double ep = 0;
 	moygradquad = 0;
 	moylaplace = 0;
-	double laplace[N];
+
 	for (int i = 0; i < N; i++) {
 		F[i][0] = 0;
 		F[i][1] = 0;
-		laplace[i] = 0;
 	}
 	
 	for (int i = 0; i < N; i++) {
@@ -182,15 +184,11 @@ double force2D(double(&q1)[N][2],double(&F)[N][2], double& moygradquad, double& 
 			double dist = sqrt(pow(rij[0], 2) + pow(rij[1], 2));
 			double f = f1D(dist);//Valeur de la force
 			//cout << dist << " ; " << f << endl;
-			//Direction ?
-			laplace[i] += derivee2(dist);
-			laplace[j] += derivee2(dist);
-
+	
 			F[i][0] += -f * rij[0] / dist;
 			F[i][1] += -f * rij[1] / dist;
 			F[j][0] += +f * rij[0] / dist;
 			F[j][1] += +f * rij[1] / dist;
-			
 			
 			ep += pot(dist);
 			//cout << ep << endl;
@@ -199,12 +197,10 @@ double force2D(double(&q1)[N][2],double(&F)[N][2], double& moygradquad, double& 
 	}
 	for (int i = 0; i < N; i++) {
 		moygradquad += pow(F[i][0], 2)+ pow(F[i][1], 2);
-		//cout << moylaplace << endl;
-		moylaplace += laplace[i];
 	}
 
 	moygradquad /= N;
-	moylaplace /= N;
+	moylaplace =laplacian(q1)/ N;
 	return ep;
 }
 

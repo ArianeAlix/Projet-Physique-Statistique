@@ -49,8 +49,8 @@ double* dist3D(double* qi, double* qj){
 void init3D(double (&q1)[N][3], double (&p)[N][3]) {
 
 	unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-    //default_random_engine generator(0); //Si l'on veut tracer des paramètres/valeur pour une même simulation
-	default_random_engine generator(seed);
+    default_random_engine generator(0); //Si l'on veut tracer des paramètres/valeur pour une même simulation
+	//default_random_engine generator(seed);
 	normal_distribution<double> distribution(0, eps/m);
 	double en = 0.0;//energy of the whole system
     double sump[3] = { 0, 0, 0 };
@@ -157,17 +157,20 @@ double potential_tot(double(&q1)[N][3]) {
 
 
 
-//return the laplacian
+//retourne le laplacien
 double laplacian(double(&q1)[N][3]) {
     double laplace = 0;
     double dV[N];
+	for (int i = 0; i < N; i++) {
+		dV[i] = 0;
+	}
 
     for (int i = 0; i < N; i++) {
         for (int j = i + 1; j < N; j++) {
             double rij[3] = { dist3D(q1[i], q1[j])[0], dist3D(q1[i], q1[j])[1] , dist3D(q1[i], q1[j])[2] };
             double dist = sqrt(pow(rij[0], 2) + pow(rij[1], 2)+pow(rij[2], 2));
-            dV[i] += derivee2(dist) + f1D(dist)* 2/dist;
-            dV[j] += derivee2(dist) + f1D(dist)* 2/ dist;
+            dV[i] += derivee2(dist) +  2/dist;
+            dV[j] += derivee2(dist) +  2/dist;
         }
     }
     for (int i = 0; i < N; i++) {
@@ -177,17 +180,14 @@ double laplacian(double(&q1)[N][3]) {
     return laplace;
 }
 
-//F equals to the vector -grad
+//F correspond au vecteur -grad
 double force3D(double(&q1)[N][3],double(&F)[N][3], double& moygradquad, double& moylaplace) {
     double ep = 0;
     moygradquad = 0;
-    moylaplace = 0;
-    double laplace[N];
     for (int i = 0; i < N; i++) {
         F[i][0] = 0;
         F[i][1] = 0;
         F[i][2] = 0;
-        laplace[i] = 0;
     }
 
     for (int i = 0; i < N; i++) {
@@ -197,8 +197,6 @@ double force3D(double(&q1)[N][3],double(&F)[N][3], double& moygradquad, double& 
             double f = f1D(dist);//Valeur de la force
             //cout << dist << " ; " << f << endl;
             //Direction ?
-            laplace[i] += derivee2(dist);
-            laplace[j] += derivee2(dist);
 
             F[i][0] += -f * rij[0] / dist;
             F[i][1] += -f * rij[1] / dist;
@@ -216,11 +214,10 @@ double force3D(double(&q1)[N][3],double(&F)[N][3], double& moygradquad, double& 
     for (int i = 0; i < N; i++) {
         moygradquad += pow(F[i][0], 2)+ pow(F[i][1], 2)+ pow(F[i][2], 2);
         //cout << moylaplace << endl;
-        moylaplace += laplace[i];
     }
 
     moygradquad /= N;
-    moylaplace /= N;
+    moylaplace = laplacian(q1)/N;
     return ep;
 }
 
@@ -341,12 +338,11 @@ double simulation(double deltaT, double& emin, double& emax) { //Renvoie l'erreu
 
     //On calcul l'erreur sur l'énergie totale
     etot_err /= (tmax / deltaT); //On divise par le nombre de valeurs
-    etot_err /= etot_init;
+    etot_err /= abs(etot_init);
 
     return etot_err;
 }
 
-/*
 
 void erreur_energie() {
 	//Lancer plusieurs simulations avec des deltaT différents
@@ -354,31 +350,34 @@ void erreur_energie() {
 	ofstream erreur_en;
 	erreur_en.open("Erreur_energie_3d.txt");
 	erreur_en << "deltaT etot_err \n";
+	double deltaT = 5*pow(10, -3);
 
-	double deltaT = pow(10, -5);
 	int compteur = 0;
-	for (int i = 0; i < 30; i++) {
+	for (int i = 0; i < 10; i++) {
+		double emin, emax;
 		cout << "Simulation numero " << ++compteur << "..." << endl;
-		deltaT += 5 * pow(10, -4);//pas de temps de la simulation
-		erreur_en << pow(deltaT, 2) << " " << simulation(deltaT) << "\n";
+
+		simulation(deltaT, emin, emax);
+
+		deltaT += pow(10, -3);//pas de temps de la simulation
+		erreur_en << pow(deltaT, 2) << " " << (emax - emin) << "\n";
 	}
 	cout << "Fin" << endl;
 }
 
-*/
 
 int main() {
-    double emin, emax;
+    //double emin, emax;
     //Lancement d'une simulation
     double deltaT = pow(10, -3);//pas de temps de la simulation
-    double etot_err = simulation(deltaT,emin,emax);
+    //double etot_err = simulation(deltaT,emin,emax);
 
-	cout << "Erreur sur l'energie totale par rapport a l'energie initiale: " << etot_err * 100 << "%" << endl;
+	//cout << "Erreur sur l'energie totale par rapport a l'energie initiale: " << etot_err * 100 << "%" << endl;
 
-	/*
+	
 	//Pour pouvoir tracer l'erreur sur l'énergie en fonction du pas de temps
 	erreur_energie();
 
-	*/
+	
 	return 0;
 }

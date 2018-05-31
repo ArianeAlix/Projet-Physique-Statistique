@@ -14,7 +14,7 @@ def read_file (fn ):
 def energies():
     #Tracé des énergies cinétique, potentielle et totale
     plt.figure(figsize=(8,6))
-    Etot,Ep,Ec,names=read_file('./Energie_3d.txt')
+    Etot,Ep,Ec,names=read_file('./build/Energie_3d.txt')
     times=10**(-2)*np.arange(0,np.size(Etot),1)#car pas de simulation de 10^-3 et de releve de valeurs 10^-2
     plt.plot(times,Etot,'blue',label='Etot',linewidth=0.5)
     plt.plot(times,Ep,'red',label='Ep',linewidth=0.5)
@@ -27,7 +27,7 @@ energies()
 
 
 def temperatures():
-    with open ('./Temp_3d.txt') as f:
+    with open ('./build/Temp_3d.txt') as f:
         names =f. readline ()
         X=np. array ([[ float (x) for x in l. strip (). split (" ")] for l in f. readlines ()])
         for i in range (0,np.shape(X)[1]):
@@ -41,6 +41,26 @@ temperatures()
 
 
 
+#Tracé de l'erreur en fonction de deltaT^2
 
+def erreur():
+    with open ('./build/Erreur_energie_3d.txt') as f:
+        names =f. readline ()
+        X=np. array ([[ float (x) for x in l. strip (). split (" ")] for l in f. readlines ()])
+    plt.figure(figsize=(8,6))
+    plt.plot(X[:,0],X[:,1],'.',label='Emax-Emin')
+    
+    fit= np.polyfit(X[:,0],X[:,1],1,full=True)
+    fit_fn = np.poly1d(fit[0])
+    
+    print(fit_fn);
+    print("Erreur résiduelle: ",fit[1])
+    
+    plt.plot(X[:,0],fit_fn(X[:,0]),'-',label='Regression linéaire')
+    plt.title("Amplitude des variations d'énergie en fonction du carré du pas de temps")
+    plt.legend()
+    plt.show()
+   
+erreur()
 
 

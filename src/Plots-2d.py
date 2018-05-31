@@ -14,7 +14,7 @@ def read_file (fn ):
 def energies():
     #Tracé des énergies cinétique, potentielle et totale
     plt.figure(figsize=(8,6))
-    Etot,Ep,Ec,names=read_file('./Energie_2d.txt')
+    Etot,Ep,Ec,names=read_file('./build/Energie_2d.txt')
     times=10**(-3)*np.arange(0,np.size(Etot),1)#car pas de simulation de 10^-4 et de releve de valeurs 10^-3
     plt.plot(times,Etot,'blue',label='Etot',linewidth=0.5)
     plt.plot(times,Ep,'red',label='Ep',linewidth=0.5)
@@ -27,7 +27,7 @@ energies()
 
 
 def temperatures():
-    with open ('./Temp_2d.txt') as f:
+    with open ('./build/Temp_2d.txt') as f:
         names =f. readline ()
         X=np. array ([[ float (x) for x in l. strip (). split (" ")] for l in f. readlines ()])
         for i in range (0,np.shape(X)[1]):
@@ -41,7 +41,7 @@ temperatures()
 
 
 def positions():
-    with open ('./Positions_2d.txt') as f:
+    with open ('./build/Positions_2d.txt') as f:
         names =f. readline ()
         X=np. array ([[ float (x) for x in l. strip (). split (" ")] for l in f. readlines ()])
         
@@ -55,10 +55,10 @@ positions()
 
 
 
-#Tracé de l'erreur en fonction de log_10(deltaT)
+#Tracé de l'erreur en fonction de deltaT
 
 def erreur():
-    with open ('./Erreur_energie_2d.txt') as f:
+    with open ('./build/Erreur_energie_2d.txt') as f:
         names =f. readline ()
         X=np. array ([[ float (x) for x in l. strip (). split (" ")] for l in f. readlines ()])
     plt.figure(figsize=(8,6))
