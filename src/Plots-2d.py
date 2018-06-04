@@ -40,6 +40,21 @@ def temperatures():
 temperatures()
 
 
+def pression():
+    with open ('./build/Press_2d.txt') as f:
+        names =f. readline ()
+        X=np. array ([[ float (x) for x in l. strip (). split (" ")] for l in f. readlines ()])
+        times=10**(-3)*np.arange(0,np.size(X),1)#car pas de simulation de 10^-4 et de releve de valeurs 10^-3
+        plt.figure(figsize=(8,6))
+        plt.plot(times,X,'blue',linewidth=0.5)
+        plt.title("Pression instantanée")
+        plt.legend()
+        plt.show()
+
+pression()
+
+
+
 def positions():
     with open ('./build/Positions_2d.txt') as f:
         names =f. readline ()

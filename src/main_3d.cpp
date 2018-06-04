@@ -29,7 +29,7 @@ const double rcut = 2.5*sig;
 const double rm = 1.8*sig;
 
 // Constantes liées au temps
-const double tmax = 10; //temps de la simulation
+const double tmax = 20; //temps de la simulation
 
 
 
@@ -49,8 +49,8 @@ double* dist3D(double* qi, double* qj){
 void init3D(double (&q1)[N][3], double (&p)[N][3]) {
 
 	unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-    default_random_engine generator(0); //Si l'on veut tracer des paramètres/valeur pour une même simulation
-	//default_random_engine generator(seed);
+    //default_random_engine generator(0); //Si l'on veut tracer des paramètres/valeur pour une même simulation
+	default_random_engine generator(seed);
 	normal_distribution<double> distribution(0, eps/m);
 	double en = 0.0;//energy of the whole system
     double sump[3] = { 0, 0, 0 };
@@ -367,16 +367,16 @@ void erreur_energie() {
 
 
 int main() {
-    //double emin, emax;
+    double emin, emax;
     //Lancement d'une simulation
     double deltaT = pow(10, -3);//pas de temps de la simulation
-    //double etot_err = simulation(deltaT,emin,emax);
+    double etot_err = simulation(deltaT,emin,emax);
 
-	//cout << "Erreur sur l'energie totale par rapport a l'energie initiale: " << etot_err * 100 << "%" << endl;
+	cout << "Erreur sur l'energie totale par rapport a l'energie initiale: " << etot_err * 100 << "%" << endl;
 
 	
 	//Pour pouvoir tracer l'erreur sur l'énergie en fonction du pas de temps
-	erreur_energie();
+	//erreur_energie(); //fait une fois déjà
 
 	
 	return 0;

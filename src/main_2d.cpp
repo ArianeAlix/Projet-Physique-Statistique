@@ -16,13 +16,13 @@ const double k = 1; //réduit
 
 //Paramètres des particules
 const double sigR = 3.405*pow(10, -10);//sigma réelle
-const double sig = 1;//sigma réduit
-const double a = sig;//taille d'une cellules en sigma
+const double sig = 1.0;//sigma réduit
+const double a = 0.7*sig;//taille d'une cellules en sigma
 const double epsR = kB * T; //vrai epsilon
 const double eps = 1;//eps réduit
 const double mR = 6.63*pow(10, -26);//masse réelle d'un atome d'argon
 const double m = 1;//masse réduite
-const double L = sqrt(N) * sig* a; //->côté d'un carré
+const double L = sqrt(N) * a; //->côté d'un carré
 
 //Dimensionnement du potentiel
 const double rcut = 2.5*sig;
@@ -277,6 +277,12 @@ double simulation(double deltaT, double& emin, double& emax) { //Renvoie l'erreu
 	temperatures.open("Temp_2d.txt");
 	temperatures << "Tc Tp \n";
 
+	//Exportation de la pression
+	ofstream pression;
+	pression.open("Press_2d.txt", std::ios_base::app | std::ios_base::out);
+	//pression << "Densite P \n";
+	double press = 0;
+
 
 	double etot_init = Verlet(q1, p, ep, moygradquad, moylaplace, F, deltaT);
 	emin = etot_init;
@@ -305,6 +311,7 @@ double simulation(double deltaT, double& emin, double& emax) { //Renvoie l'erreu
 			//cout << ep << endl;
 			energies << etot << " " << ep << " " << etot - ep << "\n";
 			temperatures << 2 * (etot - ep) / (N*k*2) << " " << moygradquad / moylaplace << "\n";
+
 			for (int i = 0; i < N; i++) {
 				positions << q1[i][0] << " " << q1[i][1] << " ";
 			}
@@ -312,11 +319,19 @@ double simulation(double deltaT, double& emin, double& emax) { //Renvoie l'erreu
 		}
 		t += deltaT;
 		tour++;
+
+		//Calcul pour la pression
+		for (int i = 0; i < N; i++) {
+			press += (pow(p[i][0], 2) + pow(p[i][1], 2)) / m + (F[i][0] * q1[i][0] + F[i][1] * q1[i][1]);
+		}
 	}
 
 	//On calcul l'erreur sur l'énergie totale
 	etot_err /= (tmax / deltaT); //On divise par le nombre de valeurs
 	etot_err /= etot_init;
+
+	cout << pow(L, 2) << endl;
+	pression << N / pow(L, 2) << " " << (1 / (2 * pow(L, 2)))*(press) / (tmax/deltaT) << "\n";
 
 	return etot_err;
 }
@@ -382,13 +397,13 @@ void perturbation(double(&q1)[N][2], double delt[N][2]) {
 }
 
 int main() {
+	cout << "coucou" ;
 	double emin, emax;
 	//Lancement d'une simulation
 	double deltaT = pow(10, -4);//pas de temps de la simulation
 	double etot_err = simulation(deltaT,emin,emax);
 
 	cout << "Erreur sur l'energie totale par rapport a l'energie initiale: " << etot_err * 100 << "%" << endl;
-
 	
 	//Pour pouvoir tracer l'erreur sur l'énergie en fonction du pas de temps
 	//erreur_energie(); //Déjà fait une fois
@@ -423,7 +438,6 @@ int main() {
 
 	perturbation(q1, delt);
 	*/
-
 
 	return 0;
 }
